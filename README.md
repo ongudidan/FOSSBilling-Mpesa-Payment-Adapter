@@ -61,5 +61,3 @@ This adapter includes specialized logic for FOSSBilling's internal "Add Funds" i
 
 ## License
 Apache-2.0
-# FOSSBilling-Mpesa-Payment-Adapter
-# FOSSBilling-Mpesa-Payment-Adapter
