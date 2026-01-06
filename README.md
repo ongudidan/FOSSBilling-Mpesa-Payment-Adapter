@@ -1,34 +1,30 @@
-# FOSSBilling M-Pesa Payment Adapter
+# FOSSBilling M-Pesa Payment Adapter (Standalone)
 
-A robust, single-file payment adapter for [FOSSBilling](https://fossbilling.org/) that enables Safaricom M-Pesa STK Push (Lipa Na M-Pesa) payments.
+A premium, zero-dependency, single-file payment adapter for [FOSSBilling](https://fossbilling.org/) that enables Safaricom M-Pesa STK Push (Lipa Na M-Pesa) payments.
 
 ## Features
 
--   **Consolidated Implementation**: Handles both STK Push initiation and callbacks within a single file.
--   **No External Endpoints**: Uses FOSSBilling's standard `ipn.php` for all communication.
+-   **Zero Dependencies**: Fully self-contained. No `composer install` or external SDKs required.
+-   **Premium UI**: Includes a loading overlay with a spinner and "Waiting for PIN" status feedback.
+-   **Real-time Polling**: Automatically polls the payment status every 3 seconds and redirects the user immediately upon confirmation.
+-   **Intelligent Phone Input**: Features a fixed `254` prefix and handles `07...`, `01...`, or `254...` formats automatically.
+-   **Robust Error Handling**: Detects user cancellations on the phone and handles transaction timeouts gracefully.
 -   **Wallet Recharge Fix**: Specifically handles "Add Funds" invoices to ensure the wallet balance increases correctly without double-accounting.
--   **STK Push Support**: Sends a payment prompt directly to the customer's mobile phone.
--   **Robust Logging**: Integrates with FOSSBilling's debug system for easy troubleshooting.
+-   **Native IPN Routing**: Uses FOSSBilling's standard `ipn.php` for all communication—no external initiation scripts needed.
 
 ## Prerequisites
 
 -   FOSSBilling version 0.5.x or higher.
--   PHP 8.x
--   The `ongudidan/mpesa-sdk` package installed in your FOSSBilling environment.
+-   PHP 8.2 or higher.
+-   A publicly accessible FOSSBilling URL (M-Pesa cannot reach `localhost`).
 
 ## Installation
 
-1.  **Install the SDK**:
-    In your FOSSBilling root directory, run:
-    ```bash
-    composer require ongudidan/mpesa-sdk
-    ```
-
-2.  **Upload the Adapter**:
+1.  **Upload the Adapter**:
     Download [Mpesa.php](Mpesa.php) and place it in your FOSSBilling installation at:
     `library/Payment/Adapter/Mpesa.php`
 
-3.  **Logo (Optional)**:
+2.  **Logo (Optional)**:
     Place an M-Pesa logo (65x30px) in `data/assets/payment_gateways/mpesa.png`.
 
 ## Configuration
@@ -39,13 +35,13 @@ A robust, single-file payment adapter for [FOSSBilling](https://fossbilling.org/
 4.  Enter your M-Pesa API credentials:
     -   **Consumer Key / Secret**: From the Safaricom Daraja Portal.
     -   **Business ShortCode**: Your Paybill or Till number.
-    -   **Passkey**: Lipa Na M-Pesa Online passkey.
+    -   **Passkey**: Lipa Na M-Pesa Online passkey (LNM Passkey).
     -   **Test Mode**: Enable for Sandbox testing.
 
 ## Important Notes
 
 ### Callback URL
-Ensure your FOSSBilling **System URL** is publicly accessible. M-Pesa's API cannot send callbacks to `localhost`. You can check this in `config.php`:
+Ensure your FOSSBilling **System URL** is publicly accessible and use HTTPS. M-Pesa's API cannot send callbacks to `localhost`. You can check this in `config.php`:
 ```php
 'url' => 'https://your-domain.com/',
 ```
@@ -56,7 +52,7 @@ This adapter includes specialized logic for FOSSBilling's internal "Add Funds" i
 ## Troubleshooting
 
 -   **"Invalid CallBackURL"**: Make sure your site is HTTPS and publicly accessible.
--   **"Failed to initiate"**: Check your Consumer Key/Secret and ensure the `shortcode` matches the one provided by Safaricom for your chosen environment.
+-   **"Failed to initiate"**: Check your Consumer Key/Secret and ensure the `shortcode` matches the environment (Sandbox vs Live).
 -   **Debug Logs**: Enable `DEBUG` in `config.php` to see detailed logs in `data/log/php_error.log`.
 
 ## License

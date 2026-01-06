@@ -8,13 +8,9 @@
  * @license http://www.apache.org/licenses/LICENSE-2.0 Apache-2.0
  */
 
-use Mpesa\Mpesa as MpesaSDK;
-
 class Payment_Adapter_Mpesa implements FOSSBilling\InjectionAwareInterface
 {
     protected ?Pimple\Container $di = null;
-
-    private MpesaSDK $mpesa;
 
     public function setDi(Pimple\Container $di): void
     {
@@ -56,8 +52,6 @@ class Payment_Adapter_Mpesa implements FOSSBilling\InjectionAwareInterface
                 throw new Payment_Exception('The ":pay_gateway" payment gateway is not fully configured. Please configure the :missing', [':pay_gateway' => 'M-Pesa', ':missing' => 'Lipa Na M-Pesa Passkey'], 4001);
             }
         }
-
-        $this->mpesa = new MpesaSDK();
     }
 
     public static function getConfig()
@@ -216,7 +210,7 @@ class Payment_Adapter_Mpesa implements FOSSBilling\InjectionAwareInterface
                 $invoiceService = $this->di['mod_service']('Invoice');
                 $payableAmount = $invoiceService->getTotalWithTax($invoice);
 
-                // Setup M-Pesa SDK for initiation
+                // Setup M-Pesa settings for initiation
                 $consumerKey = ($this->config['test_mode']) ? $this->config['test_consumer_key'] : $this->config['consumer_key'];
                 $consumerSecret = ($this->config['test_mode']) ? $this->config['test_consumer_secret'] : $this->config['consumer_secret'];
                 $shortcode = ($this->config['test_mode']) ? $this->config['test_shortcode'] : $this->config['shortcode'];
@@ -228,7 +222,7 @@ class Payment_Adapter_Mpesa implements FOSSBilling\InjectionAwareInterface
                 $callbackUrl = $payGatewayService->getCallbackUrl($payGateway, $invoice);
 
                 // Run STK Push
-                $response = $this->mpesa->STKPushSimulation([
+                $response = $this->_stkPushSimulation([
                     'BusinessShortCode' => $shortcode,
                     'LipaNaMpesaPasskey' => $passkey,
                     'TransactionType' => 'CustomerPayBillOnline',
@@ -293,7 +287,7 @@ class Payment_Adapter_Mpesa implements FOSSBilling\InjectionAwareInterface
         }
 
         // Get callback data from M-Pesa
-        $callbackData = $this->mpesa->getDataFromCallback();
+        $callbackData = $this->_getDataFromCallback();
         if (!$callbackData) {
             // Check raw post data from ipn.php
             $callbackData = $data['http_raw_post_data'];
@@ -402,7 +396,7 @@ class Payment_Adapter_Mpesa implements FOSSBilling\InjectionAwareInterface
         $this->di['db']->store($tx);
 
         // Send success response to M-Pesa
-        $this->mpesa->finishTransaction();
+        $this->_finishTransaction();
     }
 
     protected function _generateForm(Model_Invoice $invoice): string
@@ -748,5 +742,89 @@ class Payment_Adapter_Mpesa implements FOSSBilling\InjectionAwareInterface
         ];
 
         return strtr($form, $bindings);
+    }
+
+    /**
+     * Internal M-Pesa API methods (Self-contained)
+     */
+
+    protected function _stkPushSimulation($data)
+    {
+        extract($data);
+        $url = ($environment === 'live')
+            ? 'https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest'
+            : 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest';
+
+        $token = $this->_generateToken($consumer_key, $consumer_secret, $environment);
+
+        $timestamp = '20' . date("ymdhis");
+        $password = base64_encode($BusinessShortCode . $LipaNaMpesaPasskey . $timestamp);
+
+        $curl = curl_init($url);
+        curl_setopt_array($curl, [
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $token
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode([
+                'BusinessShortCode' => $BusinessShortCode,
+                'Password' => $password,
+                'Timestamp' => $timestamp,
+                'TransactionType' => $TransactionType,
+                'Amount' => $Amount,
+                'PartyA' => $PartyA,
+                'PartyB' => $PartyB,
+                'TransactionDesc' => $TransactionDesc,
+                'Remarks' => $Remarks,
+                'PhoneNumber' => $PhoneNumber,
+                'CallBackURL' => $CallBackURL,
+                'AccountReference' => $AccountReference
+            ])
+        ]);
+
+        $response = curl_exec($curl);
+        curl_close($curl);
+        return $response;
+    }
+
+    protected function _generateToken($key, $secret, $environment)
+    {
+        $url = ($environment === 'live')
+            ? 'https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials'
+            : 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials';
+
+        $credentials = base64_encode($key . ':' . $secret);
+
+        $curl = curl_init($url);
+        curl_setopt_array($curl, [
+            CURLOPT_HTTPHEADER => ['Authorization: Basic ' . $credentials],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HEADER => false,
+        ]);
+
+        $response = curl_exec($curl);
+        curl_close($curl);
+
+        $res = json_decode($response);
+        return $res->access_token ?? null;
+    }
+
+    protected function _getDataFromCallback()
+    {
+        return file_get_contents('php://input');
+    }
+
+    protected function _finishTransaction($status = true)
+    {
+        $result = $status ?
+            ["ResultDesc" => "Confirmation Service request accepted successfully", "ResultCode" => "0"] :
+            ["ResultDesc" => "Confirmation Service not accepted", "ResultCode" => "1"];
+
+        header('Content-Type: application/json');
+        echo json_encode($result);
+        exit;
     }
 }
